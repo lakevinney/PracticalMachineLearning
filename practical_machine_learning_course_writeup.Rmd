@@ -1,0 +1,133 @@
+---
+title: "Practical Machine Learning: Prediction Assignment Writeup"
+author: "Eugene Kozhoma"
+date: "01/05/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Data
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+## Reference
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.
+
+## Goal
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+## Preprocessing
+### Loading the libraries
+```{r message=FALSE, warning=FALSE, cache=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(ggplot2)
+```
+
+### Download training and test data
+```{r message=FALSE, warning=FALSE}
+inTrainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+inTestUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+inTrainFile <- "pml-training.csv"
+inTestFile  <- "pml-testing.csv"
+
+if (!file.exists(inTrainFile)) 
+{
+  download.file(inTrainUrl, destfile=inTrainFile, method="curl")
+}
+
+if (!file.exists(inTestFile))
+{
+  download.file(inTestUrl, destfile=inTestFile, method="curl")
+}
+```
+
+### Load the data into frames
+
+Read the files. Also set indicators of missing data to NA in order for them to be processed.
+```{r}
+inTrainData <- read.csv(inTrainFile, na.strings=c("NA","#DIV/0!",""))
+inTestData <-  read.csv(inTestFile, na.strings=c("NA","#DIV/0!",""))
+```
+
+```{r}
+dim(inTrainData)
+dim(inTestData)
+```
+There are 19622 observations and 160 variables in the training data set. The testing data set contains of 20 observations and 160 variables.
+
+### Perform data clean
+
+Leave out NA cases and unuseful data.
+```{r}
+complete <- complete.cases(t(inTrainData)) & complete.cases(t(inTestData))
+inTrainData <- inTrainData[,complete]
+inTestData  <- inTestData[,complete]
+
+inTrainData <- inTrainData[,-c(1,3,4,5,6,7)]
+inTestData <- inTestData[,-c(1,3,4,5,6,7)]
+```
+
+```{r}
+dim(inTrainData)
+dim(inTestData)
+```
+There are 19622 observations and only 54 variables left in the training data set. The testing data set contains of 20 observations and 54 variables.
+
+## Split the data and fit a predictive model
+```{r}
+set.seed(1969)
+inTrain <- createDataPartition(inTrainData$classe, p=0.7, list=FALSE)
+training <- inTrainData[inTrain,]
+testing <- inTrainData[-inTrain,]
+```
+
+A predictive model is fit using Random Forest algorithm because it automatically selects important variables and is robust to correlated covariates & outliers in general. We will use 5-fold cross validation when applying the algorithm.
+```{r}
+trCtrl <- trainControl(method="cv", 5)
+modelFit <- train(classe ~ ., data=training, method="rf", trControl=trCtrl, ntree=250)
+modelFit
+```
+
+### Check model performance on the validation data set
+```{r}
+prediction <- predict(modelFit, testing)
+confusionMatrix(as.factor(testing$classe), prediction)
+```
+### Accuracy:
+```{r}
+accuracy <- postResample(prediction, as.factor(testing$classe))
+accuracy
+```
+### Out of sample error:
+```{r}
+outOfSampleErr <- 1 - as.numeric(confusionMatrix(as.factor(testing$classe), prediction)$overall[1])
+outOfSampleErr
+```
+
+### Predict on the original test set
+```{r}
+result <- predict(modelFit, inTestData[, -length(names(inTestData))])
+result
+```
+
+
+
+
+
+
+
+
